@@ -1,15 +1,24 @@
+extern crate rand;
+
 use std::fmt::{Debug, Formatter, Result};
 use std::mem;
+use std::rc::Rc;
+use std::cell::RefCell;
+use rand::distributions::{IndependentSample, Range};
+
+type Next<T> = Rc<RefCell<LinkedList<T>>>;
 
 pub struct LinkedList<T: Copy + Debug> {
-    length: usize,
-    value:  Option<T>,
-    next:   Option<Box<LinkedList<T>>>,
+    length:    usize,
+    value:     Option<T>,
+    next:      Option<Next<T>>,
+    next_skip: Option<Next<T>>,
+    position:  usize,
 }
 
 impl<T: Copy + Debug> Debug for LinkedList<T> {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "<List length: {:?} value: {:?}>", self.length, self.value)
+        write!(f, "<List position: {} length: {:?} value: {:?} skip: {:?} list: {:?}>", self.position, self.length, self.value, self.next_skip, self.next)
     }
 }
 
@@ -21,6 +30,7 @@ impl<T: Copy + Debug> Iterator for LinkedList<T> {
         let mut val       = None;
         match self.next {
             Some(ref mut list) => {
+                let mut list = list.borrow_mut();
                 val = list.value;
                 mem::swap(&mut temp_next, &mut list.next);
             },
@@ -47,34 +57,77 @@ impl<T: Copy + Debug> Iterator for LinkedList<T> {
 impl<T: Copy + Debug> LinkedList<T> {
     pub fn new() -> LinkedList<T> {
         LinkedList {
-            length: 0,
-            value:  None,
-            next:   None,
+            length:    0,
+            value:     None,
+            next:      None,
+            next_skip: None,
+            position:  0,
         }
     }
 
-    fn append(&mut self, value: T) {
-        match self.next {
+    fn append(&mut self, value: T) -> Next<T> {
+        self.length += 1;
+        let next = match self.next {
             Some(ref mut list) => {
-                list.append(value);
+                list.borrow_mut().append(value)
             },
             None => {
+                let mut list : LinkedList<T> = LinkedList::new();
+                list.position = self.position + 1;
+                let next = Rc::new(RefCell::new(list));
                 self.value = Some(value);
-                self.next  = Some(Box::new(LinkedList::new()));
+                self.next  = Some(next.clone());
+                next
+            }
+        };
+
+        let between = Range::new(0, 100);
+        let mut rng = rand::thread_rng();
+        match self.next_skip {
+            Some(_) => { },
+            None => {
+                // if oer 50% set next_skip to Some(next.cone());
+                if between.ind_sample(&mut rng) > 50 {
+                    self.next_skip = Some(next.clone());
+                }
             }
         }
-        self.length += 1;
+
+        next
     }
 
-    fn at(&mut self, position: usize) -> Option<T> {
+    fn at(&self, position: usize) -> Option<T> {
         match position {
             0 => self.value,
             _ => {
-                match self.next {
-                    Some(ref mut list) => list.at(position - 1),
-                    None => None
+                match self.next_skip {
+                    Some(ref list) => {
+                        let list = list.borrow();
+                        if position > list.position {
+                            self.skip_at(position - list.position + self.position)
+                        } else {
+                            self.next_at(position - 1)
+                        }
+                    },
+                    None => {
+                        self.next_at(position - 1)
+                    }
                 }
             }
+        }
+    }
+
+    fn skip_at(&self, position: usize) -> Option<T> {
+        match self.next_skip {
+            Some(ref list) => list.borrow().at(position),
+            None => None
+        }
+    }
+
+    fn next_at(&self, position: usize) -> Option<T> {
+        match self.next {
+            Some(ref list) => list.borrow().at(position),
+            None => None
         }
     }
 }
@@ -110,6 +163,12 @@ fn main() {
             None    => break,
         }
     }
+
+    list = LinkedList::new();
+    for i in (0 .. 10) {
+        list.append(i);
+    }
+    println!("{:?}", list);
 }
 
 #[cfg(test)]
