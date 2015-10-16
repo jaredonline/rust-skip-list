@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Formatter, Result};
+use std::mem;
 
-pub struct LinkedList<T> {
+pub struct LinkedList<T: Copy + Debug> {
     length: usize,
     value:  Option<T>,
     next:   Option<Box<LinkedList<T>>>,
@@ -12,7 +13,38 @@ impl<T: Copy + Debug> Debug for LinkedList<T> {
     }
 }
 
-impl<T: Copy> LinkedList<T> {
+impl<T: Copy + Debug> Iterator for LinkedList<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<Self::Item> {
+        let ret = self.value;
+        let mut temp_next = None;
+        let mut val       = None;
+        match self.next {
+            Some(ref mut list) => {
+                val = list.value;
+                mem::swap(&mut temp_next, &mut list.next);
+            },
+            None => {}
+        }
+        self.value = val;
+        mem::swap(&mut temp_next, &mut self.next);
+        match ret {
+            Some(_) => self.length -= 1,
+            None    => {}
+        }
+        ret
+    }
+
+    fn count(self) -> usize {
+        self.length
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.length, Some(self.length))
+    }
+}
+
+impl<T: Copy + Debug> LinkedList<T> {
     pub fn new() -> LinkedList<T> {
         LinkedList {
             length: 0,
@@ -59,7 +91,29 @@ fn main() {
     println!("{:?}", list);
     println!("{}", list.at(1));
 
-    list.at(2);
+    list = LinkedList::new();
+    for i in (0 .. 10) {
+        list.append(i);
+    }
+
+    println!("for loop:");
+    for val in list {
+        println!("  {}", val);
+    }
+
+    list = LinkedList::new();
+    for i in (0 .. 10) {
+        list.append(i);
+    }
+
+    println!("manual iteration");
+    let mut iter = list.into_iter();
+    loop {
+        match iter.next() {
+            Some(i) => println!("   {}", i),
+            None    => break,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -98,6 +152,20 @@ mod test {
 
         for i in (0 .. 100) {
             assert!(list.at(i) == i);
+        }
+    }
+
+    #[test]
+    fn many_inserts_and_iteration() {
+        let mut list = LinkedList::new();
+        for i in (0 .. 100) {
+            list.append(i);
+        }
+
+        let mut i = 0;
+        for item in list.into_iter() {
+            assert!(item == i);
+            i += 1;
         }
     }
 }
