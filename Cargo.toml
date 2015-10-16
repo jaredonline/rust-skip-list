@@ -1,0 +1,4 @@
+[package]
+name = "linked-list"
+version = "0.1.0"
+authors = ["Jared McFarland <jared.online@gmail.com>"]
