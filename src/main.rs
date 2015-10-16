@@ -179,14 +179,14 @@ mod test {
     fn insert_increments_length() {
         let mut list = LinkedList::new();
         list.append(0);
-        assert!(list.length == 1);
+        assert_eq!(list.length, 1);
     }
 
     #[test]
     fn insert_at_for_one_value() {
         let mut list = LinkedList::new();
         list.append(0);
-        assert!(list.at(0) == Some(0));
+        assert_eq!(list.at(0), Some(0));
     }
 
     #[test]
@@ -194,8 +194,8 @@ mod test {
         let mut list = LinkedList::new();
         list.append(0);
         list.append(1);
-        assert!(list.at(0) == Some(0));
-        assert!(list.at(1) == Some(1));
+        assert_eq!(list.at(0), Some(0));
+        assert_eq!(list.at(1), Some(1));
     }
 
     #[test]
@@ -206,7 +206,7 @@ mod test {
         }
 
         for i in (0 .. 100) {
-            assert!(list.at(i) == Some(i));
+            assert_eq!(list.at(i), Some(i));
         }
     }
 
@@ -219,7 +219,7 @@ mod test {
 
         let mut i = 0;
         for item in list.into_iter() {
-            assert!(item == i);
+            assert_eq!(item, i);
             i += 1;
         }
     }
