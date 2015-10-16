@@ -66,17 +66,13 @@ impl<T: Copy + Debug> LinkedList<T> {
         self.length += 1;
     }
 
-    fn at(&mut self, position: usize) -> T {
-        if position >= self.length {
-            panic!("index: {} is out of bounds for List of size {}", position, self.length);
-        }
-
+    fn at(&mut self, position: usize) -> Option<T> {
         match position {
-            0 => self.value.unwrap(),
+            0 => self.value,
             _ => {
                 match self.next {
                     Some(ref mut list) => list.at(position - 1),
-                    None => panic!("no value at that index")
+                    None => None
                 }
             }
         }
@@ -89,7 +85,7 @@ fn main() {
     list.append(0);
     list.append(1);
     println!("{:?}", list);
-    println!("{}", list.at(1));
+    println!("{}", list.at(1).unwrap());
 
     list = LinkedList::new();
     for i in (0 .. 10) {
@@ -131,7 +127,7 @@ mod test {
     fn insert_at_for_one_value() {
         let mut list = LinkedList::new();
         list.append(0);
-        assert!(list.at(0) == 0);
+        assert!(list.at(0) == Some(0));
     }
 
     #[test]
@@ -139,8 +135,8 @@ mod test {
         let mut list = LinkedList::new();
         list.append(0);
         list.append(1);
-        assert!(list.at(0) == 0);
-        assert!(list.at(1) == 1);
+        assert!(list.at(0) == Some(0));
+        assert!(list.at(1) == Some(1));
     }
 
     #[test]
@@ -151,7 +147,7 @@ mod test {
         }
 
         for i in (0 .. 100) {
-            assert!(list.at(i) == i);
+            assert!(list.at(i) == Some(i));
         }
     }
 
