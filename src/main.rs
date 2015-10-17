@@ -86,8 +86,17 @@ impl<T: Copy + Debug> LinkedList<T> {
         match self.next_skip {
             Some(_) => { },
             None => {
-                // if oer 50% set next_skip to Some(next.cone());
-                if between.ind_sample(&mut rng) > 50 {
+                // we want to increase the probablity that we'll
+                // add the skip level the further we get away from the current
+                // item so we take the difference in position and multiply it
+                // by some number, subtract it from 100 and that's our probability
+                let offset    = (next.borrow().position - self.position) * 5;
+                let threshold = if offset > 100 {
+                    0
+                } else {
+                    100 - offset
+                };
+                if between.ind_sample(&mut rng) > threshold {
                     self.next_skip = Some(next.clone());
                 }
             }
@@ -97,37 +106,43 @@ impl<T: Copy + Debug> LinkedList<T> {
     }
 
     fn at(&self, position: usize) -> Option<T> {
+        let (ret, iterations) = self._at(position, 0);
+        println!("finished an #at call with {} iterations", iterations);
+        ret
+    }
+
+    fn _at(&self, position: usize, iterations: usize) -> (Option<T>, usize) {
         match position {
-            0 => self.value,
+            0 => (self.value, iterations),
             _ => {
                 match self.next_skip {
                     Some(ref list) => {
                         let list = list.borrow();
                         if position > list.position {
-                            self.skip_at(position - list.position + self.position)
+                            self._skip_at(position - list.position + self.position, iterations + 1)
                         } else {
-                            self.next_at(position - 1)
+                            self._next_at(position - 1, iterations + 1)
                         }
                     },
                     None => {
-                        self.next_at(position - 1)
+                        self._next_at(position - 1, iterations + 1)
                     }
                 }
             }
         }
     }
 
-    fn skip_at(&self, position: usize) -> Option<T> {
+    fn _skip_at(&self, position: usize, iterations: usize) -> (Option<T>, usize) {
         match self.next_skip {
-            Some(ref list) => list.borrow().at(position),
-            None => None
+            Some(ref list) => list.borrow()._at(position, iterations),
+            None => (None, iterations)
         }
     }
 
-    fn next_at(&self, position: usize) -> Option<T> {
+    fn _next_at(&self, position: usize, iterations: usize) -> (Option<T>, usize) {
         match self.next {
-            Some(ref list) => list.borrow().at(position),
-            None => None
+            Some(ref list) => list.borrow()._at(position, iterations),
+            None => (None, iterations)
         }
     }
 }
@@ -169,6 +184,12 @@ fn main() {
         list.append(i);
     }
     println!("{:?}", list);
+
+    list = LinkedList::new();
+    for i in (0 .. 100) {
+        list.append(i);
+    }
+    list.at(100);
 }
 
 #[cfg(test)]
@@ -222,5 +243,16 @@ mod test {
             assert_eq!(item, i);
             i += 1;
         }
+    }
+
+    #[test]
+    fn many_inserts_lookup_iterations_should_be_less_than_items() {
+        let mut list = LinkedList::new();
+        for i in (0 .. 1000) {
+            list.append(i);
+        }
+
+        let (_, it) = list._at(999, 0);
+        assert!(it < 999);
     }
 }
