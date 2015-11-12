@@ -2,22 +2,23 @@ extern crate rand;
 
 use std::fmt::{Debug, Formatter, Result};
 use std::mem;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 use rand::distributions::{IndependentSample, Range};
 
 type NodeRef<T> = Rc<RefCell<Node<T>>>;
+type ReverseNodeRef<T> = Weak<RefCell<Node<T>>>;
 
 pub struct LinkedList<T: Copy + Debug> {
     length:    usize,
     head:      Option<NodeRef<T>>,
-    tail:      Option<NodeRef<T>>,
+    tail:      Option<ReverseNodeRef<T>>,
 }
 
 pub struct Node<T: Copy + Debug> {
     position: usize,
     value:    T,
-    previous: Option<NodeRef<T>>,
+    previous: Option<ReverseNodeRef<T>>,
     next:     Option<NodeRef<T>>,
     skip:     Option<NodeRef<T>>,
 }
@@ -30,6 +31,7 @@ impl<T: Copy + Debug> Debug for Node<T> {
 
 impl<T: Copy + Debug> Node<T> {
     fn new(value: T) -> Node<T> {
+        increment_node_count();
         Node {
             position: 0,
             value:    value,
@@ -66,13 +68,34 @@ impl<T: Copy + Debug> Node<T> {
                     match self.previous {
                         None => {},
                         Some (ref mut list) => {
-                            list.borrow_mut().skip_to(skip_node, skip_position);
+                            let upgraded_list = list.upgrade().unwrap();
+                            upgraded_list.borrow_mut().skip_to(skip_node, skip_position);
                         }
                     }
                 }
             }
         }
     }
+}
+
+impl<T: Copy + Debug> Drop for Node<T> {
+    fn drop(&mut self) {
+        decrement_node_count();
+    }
+}
+
+thread_local!(static NODE_COUNT: RefCell<usize> = RefCell::new(0));
+
+fn increment_node_count() {
+    NODE_COUNT.with(|c| { *c.borrow_mut() += 1; });
+}
+
+fn decrement_node_count() {
+    NODE_COUNT.with(|c| { *c.borrow_mut() -= 1; });
+}
+
+fn get_node_count() -> usize {
+    NODE_COUNT.with(|c| { *c.borrow() })
 }
 
 impl<T: Copy + Debug> Debug for LinkedList<T> {
@@ -132,30 +155,31 @@ impl<T: Copy + Debug> LinkedList<T> {
         match self.tail {
             None => {},
             Some(ref list) => {
-                list.borrow_mut().skip_to(new_tail.clone(), self.length);
+                let upgraded_list = list.upgrade().unwrap();
+                upgraded_list.borrow_mut().skip_to(new_tail.clone(), self.length);
             }
         }
         new_tail
     }
 
     fn _append(&mut self, value: T) -> NodeRef<T> {
-        let mut node : Node<T> = Node::new(value);
-        node.position = 0;
+        let node : Node<T> = Node::new(value);
         let node_ref = Rc::new(RefCell::new(node));
 
         match self.tail {
             Some(ref mut list) => {
-                let new_position = list.borrow().position + 1;
+                let upgraded_list = list.upgrade().unwrap();
+                let new_position = upgraded_list.borrow().position + 1;
                 node_ref.borrow_mut().position = new_position;
                 node_ref.borrow_mut().previous = Some(list.clone());
-                list.borrow_mut().next = Some(node_ref.clone());
+                upgraded_list.borrow_mut().next = Some(node_ref.clone());
             },
             None => {
                 self.head = Some(node_ref.clone());
             }
         };
 
-        self.tail = Some(node_ref.clone());
+        self.tail = Some(Rc::downgrade(&node_ref));
 
         node_ref
     }
@@ -308,5 +332,22 @@ mod test {
         let (result, it) = list._at(999, &head, 0);
         assert!(it < 999);
         assert_eq!(result.unwrap(), 999);
+    }
+
+    use super::get_node_count;
+
+    #[test]
+    fn nodes_should_not_leak() {
+        let count_before = get_node_count();
+        {
+            let mut list = LinkedList::new();
+            for i in (0 .. 7) {
+                list.append(i);
+            }
+
+            assert_eq!(get_node_count(), count_before + 7);
+        }
+
+        assert_eq!(get_node_count(), count_before);
     }
 }
